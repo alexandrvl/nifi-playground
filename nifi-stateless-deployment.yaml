@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nifi-stateless
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nifi-stateless
+  template:
+    metadata:
+      labels:
+        app: nifi-stateless
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "nifi-role"
+        vault.hashicorp.com/agent-inject-secret-sensitive-props-key: "secret/data/nifi/sensitive-props-key"
+        vault.hashicorp.com/agent-inject-template-sensitive-props-key: |
+          {{- with secret "secret/data/nifi/sensitive-props-key" -}}
+          export NIFI_SENSITIVE_PROPS_KEY="{{ .Data.data.key }}"
+          {{- end -}}
+        vault.hashicorp.com/agent-inject-secret-database-password: "secret/data/nifi/database"
+        vault.hashicorp.com/agent-inject-template-database-password: |
+          {{- with secret "secret/data/nifi/database" -}}
+          export NIFI_DB_PASSWORD="{{ .Data.data.password }}"
+          {{- end -}}
+        vault.hashicorp.com/agent-inject-secret-api-key: "secret/data/nifi/api"
+        vault.hashicorp.com/agent-inject-template-api-key: |
+          {{- with secret "secret/data/nifi/api" -}}
+          export NIFI_API_KEY="{{ .Data.data.key }}"
+          {{- end -}}
+    spec:
+      serviceAccountName: nifi-sa
+      containers:
+        - name: nifi-stateless
+          image: apache/nifi:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              source /vault/secrets/sensitive-props-key
+              source /vault/secrets/database-password
+              source /vault/secrets/api-key
+              java -cp /opt/nifi/nifi-current/lib/*:/opt/nifi/nifi-current/conf \
+                org.apache.nifi.stateless.bootstrap.RunStatelessFlow \
+                -f /flow/flow.json \
+                -p /flow/parameters.json \
+                -s /opt/nifi/nifi-current/conf/stateless.properties
+          env:
+            - name: NIFI_SENSITIVE_PROPS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nifi-secrets
+                  key: sensitive-props-key
+          volumeMounts:
+            - name: flow-files
+              mountPath: /flow
+            - name: stateless-properties
+              mountPath: /opt/nifi/nifi-current/conf/stateless.properties
+              subPath: stateless.properties
+      volumes:
+        - name: flow-files
+          configMap:
+            name: nifi-flow-files
+        - name: stateless-properties
+          configMap:
+            name: nifi-stateless-properties

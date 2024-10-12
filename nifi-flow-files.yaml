@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nifi-flow-files
+data:
+  flow.json: |
+    {
+      "flowContents": {
+        "connections": [],
+        "processors": [],
+        "controllerServices": [],
+        "parameterContexts": [
+          {
+            "name": "My Parameters",
+            "parameters": [
+              {
+                "name": "DB_PASSWORD",
+                "sensitive": true
+              },
+              {
+                "name": "API_KEY",
+                "sensitive": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  parameters.json: |
+    {
+      "parameters": {
+        "DB_PASSWORD": "${NIFI_DB_PASSWORD}",
+        "API_KEY": "${NIFI_API_KEY}"
+      }
+    }
